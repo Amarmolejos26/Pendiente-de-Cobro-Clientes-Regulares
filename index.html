@@ -478,10 +478,21 @@ const BOOT=JSON.parse(document.getElementById('data').textContent);BOOT.corte=BO
 setup(BOOT);
 // ---- filters UI
 const selMap={fe:'e',fp:'p',fz:'z'};
-function fillSelect(id,key){
-  $(id).innerHTML='<option value="-1">Todos</option>'+DIM[key].map((v,i)=>`<option value="${i}">${esc(key==='e'||key==='p'?tc(v):v)}</option>`).join('');
+function fillSelect(id,key,ok){
+  $(id).innerHTML='<option value="-1">Todos</option>'+DIM[key].map((v,i)=>ok&&!ok.has(i)?'':`<option value="${i}">${esc(key==='e'||key==='p'?tc(v):v)}</option>`).join('');
 }
-function fillAll(){Object.entries(selMap).forEach(([id,k])=>fillSelect(id,k))}
+function fillAll(){CASC=null;Object.entries(selMap).forEach(([id,k])=>fillSelect(id,k))}
+let CASC=null;
+function cascade(){
+  if(!CASC||CASC.R!==R){const n=DIM.a.length,e=Array.from({length:n},()=>new Set()),p=Array.from({length:n},()=>new Set()),ep=new Map();
+    for(const row of R){const z=CL[row[0]][2];if(e[z]){e[z].add(row[3]);p[z].add(row[4])}let t=ep.get(row[3]);if(!t)ep.set(row[3],t=new Set());t.add(row[4])}
+    CASC={R,e,p,ep,key:null}}
+  const okE=F.a>=0?CASC.e[F.a]:null;if(okE&&F.e>=0&&!okE.has(F.e))F.e=-1;
+  let okP=F.a>=0?CASC.p[F.a]:null;if(F.e>=0){const t=CASC.ep.get(F.e)||new Set();okP=okP?new Set([...okP].filter(x=>t.has(x))):t}
+  if(okP&&F.p>=0&&!okP.has(F.p))F.p=-1;
+  const key=F.a+'|'+F.e;if(key===CASC.key)return;CASC.key=key;
+  fillSelect('fe','e',okE);fillSelect('fp','p',okP);$('fe').value=F.e;$('fp').value=F.p;
+}
 function asgChips(){
   const el=$('asgChips');
   el.innerHTML=`<button type="button" class="zchip${F.a<0?' active':''}" data-a="-1" aria-pressed="${F.a<0}">Todas las zonas</button>`+
@@ -1066,7 +1077,7 @@ function meta(){
   {const ms=PER.map(perInfo).filter(x=>x.kind==='m');const ft=document.querySelector('.org-tag .for');if(ft&&ms.length){const o=ms[ms.length-1],n=ms[0];ft.textContent='· Facturación '+(ms.length>1?MESES[o.m].toLowerCase()+(o.y!==n.y?' '+o.y:'')+'–':'')+MESES[n.m].toLowerCase()+' '+n.y}}
 }
 function render(){
-  A=aggregate();meta();
+  cascade();A=aggregate();meta();
   chips();kpis();resumen();alerta();$('kpis').querySelectorAll('[data-spec]').forEach(b=>b.addEventListener('click',()=>openSpec(b.dataset.spec)));perChart();
   const estItems=[...A.estD].map((t,k)=>({k,t})).filter(d=>Math.abs(d.t)>0).sort((a,b)=>b.t-a.t);
   hbars($('estBars'),estItems,{key:'est',labelFn:d=>EST[d.k]+(EXC.has(d.k)&&IRR>=0?' (sin irreg.)':'')});
