@@ -772,11 +772,28 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('drawer').hidden&
 $('exAll').addEventListener('click',()=>{F.e=-1;page=0;render()});
 function toast(m){const t=document.createElement('div');t.className='toast';t.textContent=m;document.body.appendChild(t);setTimeout(()=>t.remove(),2200)}
 async function copyText(txt,msg){try{await navigator.clipboard.writeText(txt);toast(msg)}catch(e){const ta=document.createElement('textarea');ta.value=txt;document.body.appendChild(ta);ta.select();try{document.execCommand('copy');toast(msg)}catch(_){toast('No se pudo copiar')}ta.remove()}}
+function styleHdr(d){
+  const z=XLSX.CFB.read(new Uint8Array(d),{type:'array'}),gi=n=>z.FullPaths.findIndex(p=>p.endsWith(n));
+  const si=gi('xl/styles.xml'),wi=gi('xl/worksheets/sheet1.xml');if(si<0||wi<0)return d;
+  const td=new TextDecoder(),te=new TextEncoder();let st=td.decode(z.FileIndex[si].content),fo=0,fi=0,xi=0;
+  st=st.replace(/<fonts count="(\d+)">([\s\S]*?)<\/fonts>/,(a,c,b)=>{fo=+c;return `<fonts count="${fo+1}">${b}<font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/><family val="2"/></font></fonts>`});
+  st=st.replace(/<fills count="(\d+)">([\s\S]*?)<\/fills>/,(a,c,b)=>{fi=+c;return `<fills count="${fi+1}">${b}<fill><patternFill patternType="solid"><fgColor rgb="FF1F497D"/><bgColor indexed="64"/></patternFill></fill></fills>`});
+  st=st.replace(/<cellXfs count="(\d+)">([\s\S]*?)<\/cellXfs>/,(a,c,b)=>{xi=+c;return `<cellXfs count="${xi+1}">${b}<xf numFmtId="0" fontId="${fo}" fillId="${fi}" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment vertical="center"/></xf></cellXfs>`});
+  if(!xi)return d;z.FileIndex[si].content=te.encode(st);
+  const c=z.FileIndex[wi].content,u8=c instanceof Uint8Array?c:new Uint8Array(c),pre=td.decode(u8.subarray(0,Math.min(u8.length,400000))),k=pre.indexOf('</row>');if(k<0)return d;
+  let h=pre.slice(0,k).replace(/<c r="([A-Z]+1)"( s="\d+")?/g,`<c r="$1" s="${xi}"`).replace('<sheetView workbookViewId="0"/>','<sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView>');
+  const hb=te.encode(h),nb=te.encode(pre.slice(0,k)).length,o=new Uint8Array(hb.length+u8.length-nb);o.set(hb,0);o.set(u8.subarray(nb),hb.length);z.FileIndex[wi].content=o;
+  return XLSX.CFB.write(z,{fileType:'zip',type:'array',compression:true});
+}
 async function dlXlsx(head,rows,name){
   const fn=(name.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^A-Za-z0-9\- ]+/g,' ').trim().replace(/\s+/g,'_')+'_'+String(D.corte).replace(/\//g,'-')).slice(0,120);
   busy(true,'Preparando Excel…',nf0.format(rows.length)+' filas. Puede tardar unos segundos.');await new Promise(r=>setTimeout(r,40));
   try{
-    if(typeof XLSX!=='undefined'){const ws=XLSX.utils.aoa_to_sheet([head,...rows]);ws['!cols']=head.map(h=>({wch:Math.max(10,Math.min(32,String(h).length+4))}));const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Datos');XLSX.writeFile(wb,fn+'.xlsx',{compression:true,bookSST:true})}
+    {const ci=head.indexOf('Correo'),mv=['Direccion','Referencia Direccion','Barrio'].map(h=>head.indexOf(h)).filter(i=>i>ci);
+      if(ci>=0&&mv.length){const ord=[];head.forEach((h,i)=>{if(!mv.includes(i))ord.push(i);if(i===ci)ord.push(...mv)});head=ord.map(i=>head[i]);rows=rows.map(r=>ord.map(i=>r[i]))}}
+    if(typeof XLSX!=='undefined'){const ws=XLSX.utils.aoa_to_sheet([head,...rows]);ws['!cols']=head.map(h=>({wch:Math.max(10,Math.min(32,String(h).length+4))}));const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Datos');
+      let out=XLSX.write(wb,{type:'array',bookType:'xlsx',compression:true,bookSST:true});try{out=styleHdr(out)}catch(e){console.warn('estilo encabezado',e)}
+      const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([out],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));a.download=fn+'.xlsx';document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},5000)}
     else{const txt=[head,...rows].map(r=>r.map(v=>String(v??'').replace(/[\t\r\n]+/g,' ')).join('\t')).join('\r\n');const b=new Uint8Array(2+txt.length*2);b[0]=0xFF;b[1]=0xFE;for(let i=0;i<txt.length;i++){const c=txt.charCodeAt(i);b[2+i*2]=c&255;b[3+i*2]=c>>8}
       const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([b],{type:'text/csv'}));a.download=fn+'.csv';document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},3000)}
     busy(false);toast(`${nf0.format(rows.length)} filas descargadas en Excel.`)
